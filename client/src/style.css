@@ -64,6 +64,16 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); cur
 .del:hover { color: var(--err); }
 .empty { color: var(--muted); padding: 18px 0 14px; margin: 0; max-width: 42ch; }
 
+.budget { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); display: grid; gap: 8px; }
+.budget-bar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.budget-fill { display: block; height: 100%; background: var(--accent); border-radius: 5px; transition: width .3s ease; }
+.budget-fill.over { background: var(--err); }
+.budget-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.budget-form input { flex: 1 1 160px; }
+a.chip.export { text-decoration: none; color: var(--ink); margin-left: auto; }
+.edit-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; }
+.edit-row input, .edit-row select { flex: 1 1 110px; }
+.edit-row input:first-child { flex: 2 1 180px; }
 @media (max-width: 760px) {
   .welcome { grid-template-columns: 1fr; gap: 28px; margin-top: 2vh; }
   .entry { grid-template-columns: 1fr 1fr; } .entry input:first-child { grid-column: 1 / -1; }
