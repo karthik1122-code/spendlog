@@ -30,13 +30,15 @@ server/
   app.test.js  Tests with in-memory fake models
   index.js     Connects to MongoDB, starts the server
 client/src/
-  App.jsx      Login form, the Tracker (state and data loading) and the undo toast
-  Summary.jsx  Month picker, total, category split, stats, six-month chart, budget
-  AddForm.jsx  Quick-add form (category chips, date, Enter to add)
-  Ledger.jsx   Search, filters, day groups, inline edit, page buttons
-  format.js    Rupee, month and date helpers
-  hooks.js     useDebounced
-  api.js       fetch helper
+  App.jsx       Chooses landing page or dashboard; the Tracker holds state and loads data; undo toast
+  Landing.jsx   Marketing page (hero, sample preview, features, steps) and the sign-in dialog
+  Kpis.jsx      Four headline cards: spent (change vs last month), budget, daily average, top category
+  Insights.jsx  Six-month chart and the category breakdown
+  AddForm.jsx   Quick-add form (category chips, date, Enter to add)
+  Ledger.jsx    Transactions: search (press /), filters, inline edit, page buttons
+  format.js     Rupee, month and date helpers
+  hooks.js      useDebounced
+  api.js        fetch helper
 ```
 
 ## API

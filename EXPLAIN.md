@@ -39,5 +39,9 @@
 
 **Security and operations (server).** Security headers on every response, `x-powered-by` removed, `trust proxy` so the rate limiter sees the real visitor behind Render, a one-line request log, `/api/health`, and a clean shutdown on SIGTERM.
 
+**Landing page and sign-in (client).** Logged-out visitors see `Landing.jsx`: a hero, a clearly labelled sample dashboard, a features grid and three steps. "Get started" and "Log in" open the sign-in form in a native `<dialog>`, which gives focus trapping and Esc-to-close for free. After a successful login the app swaps to the dashboard.
+
+**Dashboard layout (client).** A top bar with month arrows and the user, four KPI cards (the change vs last month is `(this - last) / last` taken from the six-month history the server already sent), two charts, the quick-add form and a transactions table. Pressing `/` focuses the search box. On phones the table rows turn into stacked cards with CSS only.
+
 ## Limits
 No password reset. Summaries are calculated in JavaScript, not with a MongoDB aggregation pipeline. The rate limiter is per server in memory. The tests use fake models, not a real MongoDB.

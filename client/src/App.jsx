@@ -1,61 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { monthKey, rupees } from './format.js';
+import { monthKey, monthLabel, rupees, shiftMonth } from './format.js';
 import { useDebounced } from './hooks.js';
-import Summary from './Summary.jsx';
+import Kpis from './Kpis.jsx';
+import Insights from './Insights.jsx';
+import Landing from './Landing.jsx';
 import AddForm from './AddForm.jsx';
 import Ledger from './Ledger.jsx';
-
-// A static sample bill that shows what the app does before you sign in.
-function SampleBill() {
-  const rows = [['Chai', 'Food', 20], ['Metro to college', 'Travel', 45], ['Notebook', 'Study', 60], ['Movie night', 'Fun', 250]];
-  return (
-    <aside className="bill" aria-hidden="true">
-      <p className="bill-head">Today's bill</p>
-      {rows.map(([t, c, a]) => (
-        <p className="line" key={t}><span><i className={'dot ' + c} />{t}</span><b>{rupees(a)}</b></p>
-      ))}
-      <p className="line grand"><span>Total</span><b>{rupees(375)}</b></p>
-    </aside>
-  );
-}
-
-function AuthForm({ onLoggedIn }) {
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-
-  async function submit(e) {
-    e.preventDefault();
-    try {
-      setError('');
-      onLoggedIn(await api(mode === 'login' ? '/login' : '/register', 'POST', { email, password }));
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <div className="welcome">
-      <section>
-        <h1 className="brand">Spend<span>Log</span></h1>
-        <p className="pitch">Know where your pocket money went, one line at a time.</p>
-        <SampleBill />
-      </section>
-      <form className="panel" onSubmit={submit}>
-        <h2>{mode === 'login' ? 'Welcome back' : 'Start your ledger'}</h2>
-        <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" /></label>
-        <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 6 characters" /></label>
-        {error && <p className="error" role="alert">{error}</p>}
-        <button className="primary">{mode === 'login' ? 'Log in' : 'Create account'}</button>
-        <button type="button" className="link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
-          {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}
-        </button>
-      </form>
-    </div>
-  );
-}
 
 // Shows a message for a few seconds; "Undo" brings back a deleted expense.
 function Toast({ toast, onUndo, onClose }) {
@@ -159,24 +110,31 @@ function Tracker({ user, onLogout }) {
     }
   }
 
+  const initial = (user.email[0] || '?').toUpperCase();
   return (
-    <div className="shell">
-      <header className="top">
+    <div className="app">
+      <header className="topbar">
         <h1 className="brand small">Spend<span>Log</span></h1>
-        <p className="who">{user.email} <button className="link" onClick={onLogout}>Log out</button></p>
+        <div className="month-nav" role="group" aria-label="Month">
+          <button className="nav" aria-label="Previous month" onClick={() => changeMonth(shiftMonth(month, -1))}>‹</button>
+          <p>{monthLabel(month, { month: 'long', year: 'numeric' })}</p>
+          <button className="nav" aria-label="Next month" disabled={month === currentMonth} onClick={() => changeMonth(shiftMonth(month, 1))}>›</button>
+        </div>
+        <div className="user">
+          <span className="avatar" aria-hidden="true">{initial}</span>
+          <span className="who">{user.email}</span>
+          <button className="link" onClick={onLogout}>Log out</button>
+        </div>
       </header>
 
-      <aside className="rail">
-        <Summary summary={summary} month={month} currentMonth={currentMonth} onMonth={changeMonth}
-          budget={budget} budgetInput={budgetInput} onBudgetInput={setBudgetInput} onSaveBudget={saveBudget} />
-      </aside>
-
-      <main className="main">
+      <div className="dash">
+        <Kpis summary={summary} month={month} budget={budget} budgetInput={budgetInput} onBudgetInput={setBudgetInput} onSaveBudget={saveBudget} />
+        <Insights summary={summary} month={month} onMonth={changeMonth} />
         <AddForm onAdd={addExpense} />
         {error && <p className="error" role="alert">{error}</p>}
         <Ledger data={list} filter={filter} onFilter={changeFilter} query={query} onQuery={changeQuery} searching={Boolean(search)}
           onPage={setPage} onEdit={editExpense} onDelete={deleteExpense} />
-      </main>
+      </div>
 
       {toast && <Toast toast={toast} onUndo={undoDelete} onClose={() => setToast(null)} />}
     </div>
@@ -195,5 +153,5 @@ export default function App() {
   async function logout() { await api('/logout', 'POST'); setUser(null); }
 
   if (checking) return <main className="loading"><p className="muted">Loading…</p></main>;
-  return user ? <Tracker user={user} onLogout={logout} /> : <AuthForm onLoggedIn={setUser} />;
+  return user ? <Tracker user={user} onLogout={logout} /> : <Landing onLoggedIn={setUser} />;
 }
