@@ -1,6 +1,6 @@
 # SpendLog
 
-A small full-stack expense tracker. Create an account, log what you spend, see totals by category.
+A small full-stack expense tracker. Create an account, log what you spend, set a monthly budget, and see totals, category split and a six-month chart.
 
 **Stack:** React (Vite) · Express 5 · MongoDB with Mongoose · JWT in an httpOnly cookie · bcrypt
 
@@ -50,4 +50,4 @@ client/src/
 
 ## Limits
 
-No pagination, no password reset. The login rate limiter lives in memory, so it resets when the server restarts and is not shared between servers. It is a learning project.
+No password reset, and the expense list is paged in the browser, not by the server. The login rate limiter lives in memory, so it resets when the server restarts and is not shared between servers. It is a learning project.
