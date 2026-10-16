@@ -9,7 +9,9 @@
 - The JWT lives in an httpOnly cookie, so page scripts cannot read it.
 - Every expense query includes the user id, so users cannot see, edit or delete each other's data.
 - `createApp` takes the models as arguments so tests can use in-memory fakes.
-- Totals, monthly charts and stats are computed from the one expenses list, never stored, so they cannot go out of date.
+- Totals, charts and stats are computed from the expenses on request, never stored, so they cannot go out of date.
+- Filtering, searching and paging happen in the database (`skip`/`limit` plus a `countDocuments`), and a compound index `{ user, date }` backs the common query.
+- Months follow the user's clock: the browser sends its time-zone offset and the server builds the month edges from it.
 
 ## How each feature works (say these out loud)
 
@@ -25,9 +27,17 @@
 
 **Error handler.** Express 5 passes errors from async routes to one error middleware. A bad id becomes 404, a Mongoose validation error becomes 400, and anything else becomes a plain 500 without leaking details.
 
-**Month navigation, stats and six-month chart (front end only).** `month` is a 'YYYY-MM' key in state. The arrows shift it with `shiftMonth`. `monthList` filters the expenses to that month, and the total, category split, daily average, biggest expense and top category are all computed from it. The chart sums each of the last six months and scales the bars to the biggest one; clicking a bar selects that month.
+**Paged list and search (server).** `GET /api/expenses` builds one Mongo filter from the query string: always the user id, then category, then either a title search (case-insensitive, with regex characters escaped so `(` cannot break it) or a month range. It returns `{ items, total, page, pages }`. A search ignores the month, so it finds old expenses too.
 
-**Search and "Show more".** Typing searches titles across all months; with an empty box the list shows the selected month. `limit` starts at 10 and grows by 10 each time you press "Show more", and it resets when the month, filter or search changes.
+**Summary (server).** `GET /api/summary` loads only the date range it needs and passes it to the pure function `buildSummary`, which returns the total, category split, biggest expense, top category, daily average and the last six months. Because it is a pure function it has its own tests.
+
+**Month navigation and the chart (client).** `month` is a 'YYYY-MM' key in state; the arrows shift it. Changing it refetches both the summary and the list. Clicking a bar in the six-month chart selects that month.
+
+**Loading data without bugs (client).** Each `useEffect` sets an `ignore` flag in its cleanup, so a slow old response cannot overwrite a newer one. Search is debounced (`useDebounced`): it waits 300 ms after you stop typing before asking the server.
+
+**Quick add, undo and toast (client).** After adding, focus returns to the title box so you can keep typing. Deleting shows a toast with Undo that re-creates the expense with its original date; the toast closes itself after 6 seconds.
+
+**Security and operations (server).** Security headers on every response, `x-powered-by` removed, `trust proxy` so the rate limiter sees the real visitor behind Render, a one-line request log, `/api/health`, and a clean shutdown on SIGTERM.
 
 ## Limits
-No password reset, and the list is paged in the browser, not by the server. The rate limiter is per server in memory. The tests use fake models, not a real MongoDB.
+No password reset. Summaries are calculated in JavaScript, not with a MongoDB aggregation pipeline. The rate limiter is per server in memory. The tests use fake models, not a real MongoDB.

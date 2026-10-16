@@ -5,6 +5,7 @@ import { setLoginCookie, clearLoginCookie, requireAuth } from './auth.js';
 import { CATEGORIES } from './constants.js';
 import { loginLimiter } from './rateLimit.js';
 import { toCsv } from './csv.js';
+import { buildSummary, escapeRegex, isMonthKey, monthKeyAt, monthRange, readTz, shiftMonth } from './queries.js';
 
 // Check and clean the fields of an expense. Returns { error } or { value }.
 function readExpense(body = {}) {
@@ -13,16 +14,42 @@ function readExpense(body = {}) {
   const category = body.category || 'Other';
   if (!title || !(amount > 0)) return { error: 'Title and a positive amount are required' };
   if (!CATEGORIES.includes(category)) return { error: 'Pick a valid category' };
-  return { value: { title, amount, category } };
+  const value = { title, amount, category };
+  if (body.date) {
+    const date = new Date(body.date);
+    if (Number.isNaN(date.getTime())) return { error: 'That date is not valid' };
+    if (date.getTime() > Date.now() + 24 * 3600 * 1000) return { error: 'The date cannot be in the future' };
+    value.date = date;
+  }
+  return { value };
 }
 
 // The models are passed in so tests can use in-memory fakes instead of a real database.
-export function createApp({ User, Expense, secret }) {
+export function createApp({ User, Expense, secret, log = false }) {
   const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1); // behind Render's proxy, so req.ip is the real visitor, not the proxy
+
+  // Basic security headers on every response.
+  app.use((req, res, next) => {
+    res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin' });
+    next();
+  });
+  // One log line per request: method, path, status and how long it took.
+  if (log) {
+    app.use((req, res, next) => {
+      const started = Date.now();
+      res.on('finish', () => console.log(`${req.method} ${req.originalUrl.split('?')[0]} ${res.statusCode} ${Date.now() - started}ms`));
+      next();
+    });
+  }
   app.use(express.json());
   app.use(cookieParser());
   const auth = requireAuth(secret);
   const limiter = loginLimiter();
+
+  // Cheap route that says the server is up (used by uptime checks).
+  app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: Math.round(process.uptime()) }));
 
   // ---- Accounts ----
   app.post('/api/register', async (req, res) => {
@@ -69,8 +96,39 @@ export function createApp({ User, Expense, secret }) {
   });
 
   // ---- Expenses (every route below needs a logged-in user) ----
+  // One page of expenses. Filtering, searching and paging all happen in the database.
+  // ?month=2026-10 &category=Food &q=chai (search covers every month) &page=2 &limit=10 &tz=-330
   app.get('/api/expenses', auth, async (req, res) => {
-    res.json(await Expense.find({ user: req.userId }).sort({ date: -1 }));
+    const { month, category, q } = req.query;
+    const tz = readTz(req.query.tz);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+
+    const filter = { user: req.userId };
+    if (CATEGORIES.includes(category)) filter.category = category;
+    if (typeof q === 'string' && q.trim()) {
+      filter.title = { $regex: escapeRegex(q.trim().slice(0, 60)), $options: 'i' };
+    } else if (isMonthKey(month)) {
+      const { start, end } = monthRange(month, tz);
+      filter.date = { $gte: start, $lt: end };
+    }
+
+    const [items, total] = await Promise.all([
+      Expense.find(filter).sort({ date: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
+      Expense.countDocuments(filter),
+    ]);
+    res.json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
+  });
+
+  // Totals for one month plus the last six months, so the page never downloads every expense.
+  app.get('/api/summary', auth, async (req, res) => {
+    const tz = readTz(req.query.tz);
+    const current = monthKeyAt(new Date(), tz);
+    const month = isMonthKey(req.query.month) ? req.query.month : current;
+    const from = monthRange([shiftMonth(current, -5), month].sort()[0], tz).start;
+    const to = monthRange([current, month].sort()[1], tz).end;
+    const expenses = await Expense.find({ user: req.userId, date: { $gte: from, $lt: to } });
+    res.json(buildSummary(expenses, month, tz));
   });
 
   app.get('/api/expenses.csv', auth, async (req, res) => {
