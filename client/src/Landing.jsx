@@ -39,12 +39,29 @@ function AuthDialog({ mode, onMode, onClose, onLoggedIn }) {
   );
 }
 
+// Adds the class "in" once the element scrolls into view, so CSS can animate it.
+function useReveal() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !('IntersectionObserver' in window)) { el?.classList.add('in'); return; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { el.classList.add('in'); io.disconnect(); } }, { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+
 // A small, clearly labelled sample of the dashboard so visitors see the product before signing up.
 function Preview() {
   const bars = [['May', 38], ['Jun', 54], ['Jul', 31], ['Aug', 70], ['Sep', 82], ['Oct', 62]];
   const split = [['Food', 'Food', 46, '₹2,240'], ['Travel', 'Travel', 27, '₹1,310'], ['Study', 'Study', 17, '₹820'], ['Fun', 'Fun', 10, '₹490']];
   return (
-    <div className="preview" aria-hidden="true">
+    <div className="visual" aria-hidden="true">
+    <span className="fchip c1"><i className="dot Food" />Lunch ₹180 added</span>
+    <span className="fchip c2">₹1,140 left this month</span>
+    <span className="fchip c3"><i className="dot Travel" />Metro ₹40</span>
+    <div className="preview">
       <div className="preview-bar"><i /><i /><i /><span>spendlog</span></div>
       <div className="preview-body">
         <div className="p-kpis">
@@ -64,6 +81,7 @@ function Preview() {
       </div>
       <p className="sample">Sample data</p>
     </div>
+    </div>
   );
 }
 
@@ -78,6 +96,9 @@ const FEATURES = [
 
 export default function Landing({ onLoggedIn }) {
   const [mode, setMode] = useState(null); // null, 'login' or 'register'
+  const featRef = useReveal();
+  const stepRef = useReveal();
+  const finalRef = useReveal();
   return (
     <div className="landing">
       <header className="site-nav">
@@ -106,21 +127,21 @@ export default function Landing({ onLoggedIn }) {
 
         <section id="features" className="section">
           <h2>Everything you need, nothing you don't</h2>
-          <ul className="features">
+          <ul className="features reveal" ref={featRef}>
             {FEATURES.map(([title, text]) => <li key={title} className="feature"><h3>{title}</h3><p>{text}</p></li>)}
           </ul>
         </section>
 
         <section id="how" className="section">
           <h2>Up and running in three steps</h2>
-          <ol className="steps">
+          <ol className="steps reveal" ref={stepRef}>
             <li><b>1</b><h3>Create your account</h3><p>An email and a password. That's it.</p></li>
             <li><b>2</b><h3>Log what you spend</h3><p>Add each expense as it happens, with a category and a date.</p></li>
             <li><b>3</b><h3>See where it goes</h3><p>Totals, a budget bar and a six-month chart update as you add.</p></li>
           </ol>
         </section>
 
-        <section className="section final">
+        <section className="section final reveal" ref={finalRef}>
           <h2>Start your ledger today</h2>
           <p className="lede">It takes under a minute, and your first expense is the hardest part.</p>
           <button className="primary lg" onClick={() => setMode('register')}>Create free account</button>
