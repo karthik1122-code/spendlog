@@ -17,5 +17,8 @@ const expenseSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
 });
 
+// Most queries ask for one user's expenses newest first, so index exactly that.
+expenseSchema.index({ user: 1, date: -1 });
+
 export const User = mongoose.model('User', userSchema);
 export const Expense = mongoose.model('Expense', expenseSchema);

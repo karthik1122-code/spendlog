@@ -9,7 +9,7 @@ if (!MONGODB_URI || !JWT_SECRET) {
 }
 
 await mongoose.connect(MONGODB_URI);
-const app = createApp({ User, Expense, secret: JWT_SECRET });
+const app = createApp({ User, Expense, secret: JWT_SECRET, log: true });
 
 // In production the same server also serves the built React app.
 import express from 'express';
@@ -19,4 +19,7 @@ const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '../client/
 app.use(express.static(dist));
 app.get('/{*splat}', (req, res) => res.sendFile(path.join(dist, 'index.html')));
 
-app.listen(PORT, () => console.log(`SpendLog on http://localhost:${PORT}`));
+const server = app.listen(PORT, () => console.log(`SpendLog on http://localhost:${PORT}`));
+
+// When the host stops the app, finish open requests and close the database cleanly.
+process.on('SIGTERM', () => server.close(async () => { await mongoose.disconnect(); process.exit(0); }));
