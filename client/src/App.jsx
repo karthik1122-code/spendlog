@@ -4,6 +4,13 @@ import { api } from './api.js';
 const CATEGORIES = ['Food', 'Travel', 'Study', 'Fun', 'Other'];
 const rupees = n => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const sum = list => list.reduce((s, x) => s + x.amount, 0);
+const PAGE = 10; // how many expenses the list shows at a time
+
+// Months are written as 'YYYY-MM' keys, e.g. '2026-10', so they are easy to compare and shift.
+const monthKey = d => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; };
+const shiftMonth = (key, by) => { const [y, m] = key.split('-').map(Number); return monthKey(new Date(y, m - 1 + by, 1)); };
+const monthLabel = (key, opts) => new Date(Number(key.slice(0, 4)), Number(key.slice(5)) - 1, 1).toLocaleString('en-IN', opts);
+const daysIn = key => new Date(Number(key.slice(0, 4)), Number(key.slice(5)), 0).getDate();
 
 // A static sample bill that shows what the app does before you sign in.
 function SampleBill() {
@@ -67,6 +74,10 @@ function Tracker({ user, onLogout }) {
   const [budgetInput, setBudgetInput] = useState(user.budget ? String(user.budget) : '');
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ title: '', amount: '', category: 'Food' });
+  const currentMonth = monthKey(new Date());
+  const [month, setMonth] = useState(currentMonth);
+  const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(PAGE);
 
   useEffect(() => { api('/expenses').then(setExpenses).catch(e => setError(e.message)); }, []);
 
@@ -77,6 +88,7 @@ function Tracker({ user, onLogout }) {
       const created = await api('/expenses', 'POST', { title, amount, category });
       setExpenses([created, ...expenses]);
       setTitle(''); setAmount('');
+      setMonth(currentMonth); // new expenses are dated today, so jump back to this month
     } catch (err) {
       setError(err.message);
     }
@@ -120,11 +132,24 @@ function Tracker({ user, onLogout }) {
     }
   }
 
-  const now = new Date();
-  const thisMonth = expenses.filter(x => { const d = new Date(x.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-  const total = sum(thisMonth);
-  const split = CATEGORIES.map(c => ({ c, v: sum(thisMonth.filter(x => x.category === c)) })).filter(x => x.v > 0);
-  const shown = filter ? expenses.filter(x => x.category === filter) : expenses;
+  // Everything below is worked out from the one `expenses` list, so nothing extra is stored.
+  const monthList = expenses.filter(x => monthKey(x.date) === month);
+  const total = sum(monthList);
+  const split = CATEGORIES.map(c => ({ c, v: sum(monthList.filter(x => x.category === c)) })).filter(x => x.v > 0);
+  const biggest = monthList.reduce((m, x) => (x.amount > (m?.amount ?? 0) ? x : m), null);
+  const topCategory = [...split].sort((a, b) => b.v - a.v)[0];
+  const perDay = total / (month === currentMonth ? new Date().getDate() : daysIn(month));
+  const history = Array.from({ length: 6 }, (_, i) => {
+    const key = shiftMonth(currentMonth, i - 5);
+    return { key, v: sum(expenses.filter(x => monthKey(x.date) === key)) };
+  });
+  const peak = Math.max(...history.map(h => h.v), 1);
+
+  const q = query.trim().toLowerCase();
+  const pool = q ? expenses : monthList; // a search looks through every month
+  const matches = pool.filter(x => (!filter || x.category === filter) && (!q || x.title.toLowerCase().includes(q)));
+  const shown = matches.slice(0, limit);
+  const goToMonth = key => { setMonth(key); setLimit(PAGE); };
   const used = budget > 0 ? Math.min(100, (total / budget) * 100) : 0;
   const over = budget > 0 && total > budget;
 
@@ -136,9 +161,13 @@ function Tracker({ user, onLogout }) {
       </header>
 
       <section className="summary">
-        <p className="eyebrow">{now.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</p>
+        <div className="month-nav">
+          <button className="nav" aria-label="Previous month" onClick={() => goToMonth(shiftMonth(month, -1))}>‹</button>
+          <p className="eyebrow">{monthLabel(month, { month: 'long', year: 'numeric' })}</p>
+          <button className="nav" aria-label="Next month" disabled={month === currentMonth} onClick={() => goToMonth(shiftMonth(month, 1))}>›</button>
+        </div>
         <p className="total">{rupees(total)}</p>
-        <p className="muted">spent this month · {rupees(sum(expenses))} all time</p>
+        <p className="muted">{month === currentMonth ? 'spent this month' : 'spent that month'} · {rupees(sum(expenses))} all time</p>
         {split.length > 0 && (
           <>
             <div className="bar" role="img" aria-label={'Spending split: ' + split.map(x => `${x.c} ${rupees(x.v)}`).join(', ')}>
@@ -151,6 +180,22 @@ function Tracker({ user, onLogout }) {
             </ul>
           </>
         )}
+        {monthList.length > 0 && (
+          <dl className="stats">
+            <div><dt>Daily average</dt><dd>{rupees(perDay)}</dd></div>
+            <div><dt>Biggest</dt><dd>{rupees(biggest.amount)}</dd><small>{biggest.title}</small></div>
+            <div><dt>Top category</dt><dd>{topCategory.c}</dd><small>{Math.round((topCategory.v / total) * 100)}% of spend</small></div>
+          </dl>
+        )}
+        <div className="history" role="group" aria-label="Spending in the last six months">
+          {history.map(h => (
+            <button key={h.key} className={h.key === month ? 'col on' : 'col'} aria-pressed={h.key === month}
+              aria-label={`${monthLabel(h.key, { month: 'long', year: 'numeric' })}: ${rupees(h.v)}`} onClick={() => goToMonth(h.key)}>
+              <span className="col-bar" style={{ height: Math.max(4, (h.v / peak) * 100) + '%' }} />
+              <small>{monthLabel(h.key, { month: 'short' })}</small>
+            </button>
+          ))}
+        </div>
         <div className="budget">
           {budget > 0 && (
             <>
@@ -178,13 +223,19 @@ function Tracker({ user, onLogout }) {
       {error && <p className="error" role="alert">{error}</p>}
 
       <section className="ledger">
+        <input className="search" type="search" aria-label="Search expenses" placeholder="Search all months" value={query} onChange={e => { setQuery(e.target.value); setLimit(PAGE); }} />
         <div className="filters" role="group" aria-label="Filter by category">
-          <button className={!filter ? 'chip on' : 'chip'} onClick={() => setFilter(null)}>All</button>
-          {CATEGORIES.map(c => <button key={c} className={filter === c ? 'chip on' : 'chip'} onClick={() => setFilter(filter === c ? null : c)}><i className={'dot ' + c} />{c}</button>)}
+          <button className={!filter ? 'chip on' : 'chip'} onClick={() => { setFilter(null); setLimit(PAGE); }}>All</button>
+          {CATEGORIES.map(c => <button key={c} className={filter === c ? 'chip on' : 'chip'} onClick={() => { setFilter(filter === c ? null : c); setLimit(PAGE); }}><i className={'dot ' + c} />{c}</button>)}
           <a className="chip export" href="/api/expenses.csv" download>Export CSV</a>
         </div>
         {shown.length === 0 ? (
-          <p className="empty">{expenses.length === 0 ? 'Nothing logged yet. Add the first thing you bought today, even a ₹20 chai.' : `No ${filter} expenses yet.`}</p>
+          <p className="empty">{
+            q ? `No expenses match "${query.trim()}".`
+              : expenses.length === 0 ? 'Nothing logged yet. Add the first thing you bought today, even a ₹20 chai.'
+              : filter ? `No ${filter} expenses in ${monthLabel(month, { month: 'long' })}.`
+              : `Nothing logged in ${monthLabel(month, { month: 'long', year: 'numeric' })}.`
+          }</p>
         ) : (
           <ul>
             {shown.map(x => (
@@ -210,6 +261,7 @@ function Tracker({ user, onLogout }) {
             ))}
           </ul>
         )}
+        {matches.length > limit && <button className="chip more" onClick={() => setLimit(limit + PAGE)}>Show more ({matches.length - limit} left)</button>}
       </section>
     </main>
   );

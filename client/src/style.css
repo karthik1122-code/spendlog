@@ -74,6 +74,24 @@ a.chip.export { text-decoration: none; color: var(--ink); margin-left: auto; }
 .edit-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; }
 .edit-row input, .edit-row select { flex: 1 1 110px; }
 .edit-row input:first-child { flex: 2 1 180px; }
+.month-nav { display: flex; align-items: center; gap: 10px; }
+.nav { border: 1px solid var(--line); background: none; border-radius: 50%; width: 30px; height: 30px; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.nav:hover:not(:disabled) { background: var(--line); }
+.nav:disabled { opacity: .35; cursor: default; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 0; }
+.stats div { min-width: 0; }
+.stats dt { color: var(--muted); font-size: .8rem; }
+.stats dd { margin: 2px 0 0; font: 500 1rem var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stats small { color: var(--muted); font-size: .8rem; display: block; overflow-wrap: anywhere; }
+.history { display: flex; align-items: flex-end; gap: 8px; height: 96px; margin-top: 18px; }
+.col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; border: 0; background: none; padding: 0; cursor: pointer; color: var(--muted); }
+.col-bar { width: 100%; max-width: 44px; background: var(--line); border-radius: 4px 4px 0 0; transition: background .2s, height .3s; }
+.col:hover .col-bar { background: var(--muted); }
+.col.on .col-bar { background: var(--accent); }
+.col.on { color: var(--ink); font-weight: 700; }
+.col small { font-size: .75rem; }
+.search { width: 100%; margin-bottom: 10px; }
+.more { margin: 8px 0 12px; }
 @media (max-width: 760px) {
   .welcome { grid-template-columns: 1fr; gap: 28px; margin-top: 2vh; }
   .entry { grid-template-columns: 1fr 1fr; } .entry input:first-child { grid-column: 1 / -1; }
@@ -81,3 +99,5 @@ a.chip.export { text-decoration: none; color: var(--ink); margin-left: auto; }
 }
 @media (prefers-reduced-motion: no-preference) { .panel, .summary { animation: rise .4s ease-out both; } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr 1fr; } }
