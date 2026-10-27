@@ -13,6 +13,8 @@ function readExpense(body = {}) {
   const amount = Number(body.amount);
   const category = body.category || 'Other';
   if (!title || !(amount > 0)) return { error: 'Title and a positive amount are required' };
+  if (title.length > 120) return { error: 'Keep the title under 120 characters' };
+  if (amount > 1e9) return { error: 'That amount is too large' };
   if (!CATEGORIES.includes(category)) return { error: 'Pick a valid category' };
   const value = { title, amount, category };
   if (body.date) {
@@ -25,7 +27,7 @@ function readExpense(body = {}) {
 }
 
 // The models are passed in so tests can use in-memory fakes instead of a real database.
-export function createApp({ User, Expense, secret, log = false }) {
+export function createApp({ User, Expense, secret, log = false, dbReady = () => true }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // behind Render's proxy, so req.ip is the real visitor, not the proxy
@@ -43,19 +45,26 @@ export function createApp({ User, Expense, secret, log = false }) {
       next();
     });
   }
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' })); // one expense is tiny; refuse huge bodies early
   app.use(cookieParser());
   const auth = requireAuth(secret);
   const limiter = loginLimiter();
 
   // Cheap route that says the server is up (used by uptime checks).
-  app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: Math.round(process.uptime()) }));
+  // Reports 503 when the database is unreachable, so the host stops sending traffic and restarts the app.
+  app.get('/api/health', (req, res) => {
+    const db = dbReady() ? 'ok' : 'down';
+    res.status(db === 'ok' ? 200 : 503).json({ status: db === 'ok' ? 'ok' : 'degraded', db, uptime: Math.round(process.uptime()) });
+  });
 
   // ---- Accounts ----
   app.post('/api/register', async (req, res) => {
     const { email, password } = req.body || {};
-    if (!email || !password || password.length < 6) {
-      return res.status(400).json({ error: 'Email and a password of at least 6 characters are required' });
+    if (typeof email !== 'string' || typeof password !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+    if (password.length < 6 || password.length > 128) {
+      return res.status(400).json({ error: 'Password must be 6 to 128 characters' });
     }
     if (await User.findOne({ email })) return res.status(409).json({ error: 'That email is already registered' });
     const user = await User.create({ email, passwordHash: await bcrypt.hash(password, 10) });
@@ -159,6 +168,8 @@ export function createApp({ User, Expense, secret, log = false }) {
 
   // Last stop for errors thrown in any route (Express 5 forwards async errors here).
   app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request is too large' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON' });
     if (err.name === 'CastError') return res.status(404).json({ error: 'Expense not found' }); // malformed id
     if (err.name === 'ValidationError') return res.status(400).json({ error: Object.values(err.errors)[0].message });
     console.error(err);

@@ -238,3 +238,30 @@ test('health route, security headers and date checks', async () => {
   assert.equal((await add(call, c, 'Bad date', 5, 'Food', 'not-a-date')).status, 400);
   close();
 });
+
+test('health reports 503 when the database is down', async () => {
+  const server = createApp({ ...fakeModels(), secret: 's', dbReady: () => false }).listen(0);
+  const r = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+  assert.equal(r.status, 503);
+  assert.equal((await r.json()).db, 'down');
+  server.close();
+});
+
+test('rejects oversized and malformed bodies with JSON errors', async () => {
+  const { call, close } = await start();
+  const big = await call('/api/register', { method: 'POST', body: { email: 'x@y.com', password: 'x'.repeat(200 * 1024) } });
+  assert.equal(big.status, 413);
+  assert.equal(big.json.error, 'Request is too large');
+  close();
+});
+
+test('validates email, password and expense limits', async () => {
+  const { call, close } = await start();
+  assert.equal((await call('/api/register', { method: 'POST', body: { email: 'not-an-email', password: 'secret1' } })).status, 400);
+  assert.equal((await call('/api/register', { method: 'POST', body: { email: 'a@b.com', password: 'x'.repeat(200) } })).status, 400);
+  const c = await signUp(call);
+  assert.equal((await add(call, c, 'x'.repeat(121), 5, 'Food')).status, 400);
+  assert.equal((await add(call, c, 'Huge', 2e9, 'Food')).status, 400);
+  assert.equal((await add(call, c, 'Chai', 20, 'Food')).status, 201);
+  close();
+});
