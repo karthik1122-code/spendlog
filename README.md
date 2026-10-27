@@ -2,6 +2,8 @@
 
 A small full-stack expense tracker. Create an account, log what you spend, set a monthly budget, and see totals, category split and a six-month chart.
 
+It is for students and anyone who wants to know where their money went before the month ends, without a bank connection or a spreadsheet. Adding an expense takes one line and Enter, so the form sits at the top of the dashboard.
+
 **Stack:** React (Vite) · Express 5 · MongoDB with Mongoose · JWT in an httpOnly cookie · bcrypt
 
 ## Run it
@@ -11,10 +13,15 @@ npm install
 cp .env.example .env        # fill in MONGODB_URI and JWT_SECRET
 npm run server              # API on http://localhost:4000
 npm run client              # React dev server (proxies /api to the API)
-npm test                    # 13 tests, no database needed
+npm test                    # 16 API tests, no database needed
+npm run build && MONGODB_URI=mongodb://localhost:27017/spendlog-e2e npm run test:e2e   # browser journey
 ```
 
 Production: `npm run build`, then `npm run server` serves the API and the built React app from one port.
+
+CI (`.github/workflows/ci.yml`) runs the API tests, the build and the browser journey (sign up, add, edit, delete with undo, reload, search) against a MongoDB service on every push and pull request.
+
+Environment: `MONGODB_URI` (MongoDB connection string), `JWT_SECRET` (long random string; `render.yaml` generates one), optional `PORT` (default 4000).
 
 ## Layout
 
@@ -45,7 +52,7 @@ client/src/
 
 | Method | Path | Needs login | What it does |
 | --- | --- | --- | --- |
-| GET | /api/health | no | `{ status: 'ok' }` for uptime checks |
+| GET | /api/health | no | `{ status, db }`: 200 when MongoDB is connected, 503 when it is not (Render uses this) |
 | POST | /api/register | no | Create account, set login cookie |
 | POST | /api/login | no | Check password, set login cookie (rate limited) |
 | POST | /api/logout | no | Clear the cookie |
@@ -53,11 +60,11 @@ client/src/
 | PUT | /api/budget | yes | Set the monthly budget |
 | GET | /api/expenses | yes | One page of expenses: `?month=2026-10&category=Food&q=chai&page=1&limit=10&tz=-330` |
 | GET | /api/summary | yes | Month total, category split, biggest, daily average and the last six months |
-| GET | /api/expenses.csv | yes | Download your expenses as CSV |
+| GET | /api/expenses.csv | yes | Download all your expenses as CSV (every month, not only the filtered view) |
 | POST | /api/expenses | yes | Add an expense (optional `date`, not in the future) |
 | PUT | /api/expenses/:id | yes | Edit one of your expenses |
 | DELETE | /api/expenses/:id | yes | Delete one of your expenses |
 
 ## Limits
 
-No password reset. Totals are calculated in JavaScript from the month's expenses, not with a MongoDB aggregation pipeline (a good next step). The login rate limiter lives in memory, so it resets when the server restarts and is not shared between servers. It is a learning project.
+Request bodies are capped at 100 kb; titles at 120 characters. No password reset. Totals are calculated in JavaScript from the month's expenses, not with a MongoDB aggregation pipeline (a good next step). The login rate limiter lives in memory, so it resets when the server restarts and is not shared between servers. It is a learning project.

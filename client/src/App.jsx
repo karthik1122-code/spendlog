@@ -128,10 +128,11 @@ function Tracker({ user, onLogout }) {
       </header>
 
       <div className="dash">
-        <Kpis summary={summary} month={month} budget={budget} budgetInput={budgetInput} onBudgetInput={setBudgetInput} onSaveBudget={saveBudget} />
-        <Insights summary={summary} month={month} onMonth={changeMonth} />
+        {/* Logging an expense is the main job, so the form comes first. */}
         <AddForm onAdd={addExpense} />
         {error && <p className="error" role="alert">{error}</p>}
+        <Kpis summary={summary} month={month} budget={budget} budgetInput={budgetInput} onBudgetInput={setBudgetInput} onSaveBudget={saveBudget} />
+        <Insights summary={summary} month={month} onMonth={changeMonth} />
         <Ledger data={list} filter={filter} onFilter={changeFilter} query={query} onQuery={changeQuery} searching={Boolean(search)}
           onPage={setPage} onEdit={editExpense} onDelete={deleteExpense} />
       </div>
@@ -139,6 +140,13 @@ function Tracker({ user, onLogout }) {
       {toast && <Toast toast={toast} onUndo={undoDelete} onClose={() => setToast(null)} />}
     </div>
   );
+}
+
+// The free host sleeps when idle; after a few seconds, say so instead of looking frozen.
+function SlowHint() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 4000); return () => clearTimeout(t); }, []);
+  return slow ? <p className="muted">Waking up the server. Free hosting can take up to 30 seconds after a quiet spell.</p> : null;
 }
 
 export default function App() {
@@ -150,8 +158,9 @@ export default function App() {
     api('/me').then(setUser).catch(() => {}).finally(() => setChecking(false));
   }, []);
 
-  async function logout() { await api('/logout', 'POST'); setUser(null); }
+  // Even if the request fails, leave the dashboard; the cookie expires on its own.
+  async function logout() { try { await api('/logout', 'POST'); } catch { /* offline */ } setUser(null); }
 
-  if (checking) return <main className="loading"><p className="muted">Loading…</p></main>;
+  if (checking) return <main className="loading"><p className="muted">Loading…</p><SlowHint /></main>;
   return user ? <Tracker user={user} onLogout={logout} /> : <Landing onLoggedIn={setUser} />;
 }
