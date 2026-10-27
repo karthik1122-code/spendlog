@@ -1,10 +1,12 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { setLoginCookie, clearLoginCookie, requireAuth } from './auth.js';
 import { CATEGORIES } from './constants.js';
 import { loginLimiter } from './rateLimit.js';
 import { toCsv } from './csv.js';
+import { sendEmail as defaultSendEmail } from './email.js';
 import { buildSummary, escapeRegex, isMonthKey, monthKeyAt, monthRange, readTz, shiftMonth } from './queries.js';
 
 // Check and clean the fields of an expense. Returns { error } or { value }.
@@ -26,8 +28,13 @@ function readExpense(body = {}) {
   return { value };
 }
 
+const sha256 = s => crypto.createHash('sha256').update(s).digest('hex');
+const RESET_TTL_MS = 30 * 60 * 1000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // The models are passed in so tests can use in-memory fakes instead of a real database.
-export function createApp({ User, Expense, secret, log = false, dbReady = () => true }) {
+// LoginAttempt is optional: with it, failed-login counts are kept in MongoDB instead of memory.
+export function createApp({ User, Expense, LoginAttempt, secret, log = false, dbReady = () => true, sendEmail = defaultSendEmail, appUrl = '' }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // behind Render's proxy, so req.ip is the real visitor, not the proxy
@@ -47,8 +54,8 @@ export function createApp({ User, Expense, secret, log = false, dbReady = () => 
   }
   app.use(express.json({ limit: '100kb' })); // one expense is tiny; refuse huge bodies early
   app.use(cookieParser());
-  const auth = requireAuth(secret);
-  const limiter = loginLimiter();
+  const auth = requireAuth(secret, User);
+  const limiter = loginLimiter({ LoginAttempt });
 
   // Cheap route that says the server is up (used by uptime checks).
   // Reports 503 when the database is unreachable, so the host stops sending traffic and restarts the app.
@@ -60,7 +67,7 @@ export function createApp({ User, Expense, secret, log = false, dbReady = () => 
   // ---- Accounts ----
   app.post('/api/register', async (req, res) => {
     const { email, password } = req.body || {};
-    if (typeof email !== 'string' || typeof password !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !EMAIL_RE.test(email) || email.length > 254) {
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
     if (password.length < 6 || password.length > 128) {
@@ -68,31 +75,78 @@ export function createApp({ User, Expense, secret, log = false, dbReady = () => 
     }
     if (await User.findOne({ email })) return res.status(409).json({ error: 'That email is already registered' });
     const user = await User.create({ email, passwordHash: await bcrypt.hash(password, 10) });
-    setLoginCookie(res, user.id, secret);
+    setLoginCookie(res, user, secret);
     res.status(201).json({ email: user.email, budget: 0 });
   });
 
   app.post('/api/login', async (req, res) => {
     const { email, password } = req.body || {};
-    const key = `${req.ip}|${String(email).toLowerCase()}`;
-    if (limiter.blocked(key)) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes' });
-    const user = email && (await User.findOne({ email }));
+    if (typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Enter your email and password' });
+    const key = `${req.ip}|${email.toLowerCase()}`;
+    if (await limiter.blocked(key)) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes, or reset your password' });
+    const user = await User.findOne({ email });
     // Same message for "no such user" and "wrong password" so attackers learn nothing.
-    if (!user || !(await bcrypt.compare(password || '', user.passwordHash))) {
-      limiter.fail(key);
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      await limiter.fail(key);
       return res.status(401).json({ error: 'Wrong email or password' });
     }
-    limiter.clear(key);
-    setLoginCookie(res, user.id, secret);
+    await limiter.clear(key);
+    setLoginCookie(res, user, secret);
     res.json({ email: user.email, budget: user.budget || 0 });
+  });
+
+  // Forgot password: email a single-use link that works for 30 minutes.
+  // The reply is the same whether or not the email has an account, so it cannot be used to find accounts.
+  const FORGOT_REPLY = { message: 'If an account uses that email, a reset link is on its way. It works for 30 minutes.' };
+  app.post('/api/forgot', async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email) || email.length > 254) return res.status(400).json({ error: 'Enter a valid email address' });
+    const key = `forgot|${req.ip}`;
+    if (await limiter.blocked(key)) return res.status(429).json({ error: 'Too many reset requests. Try again in 15 minutes' });
+    await limiter.fail(key); // counts requests, so one visitor cannot flood someone's inbox
+    const user = await User.findOne({ email });
+    if (user) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      await User.findByIdAndUpdate(user.id, { resetTokenHash: sha256(token), resetTokenExpires: new Date(Date.now() + RESET_TTL_MS) });
+      const base = appUrl || `${req.protocol}://${req.get('host')}`;
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Reset your SpendLog password',
+          text: `Someone asked to reset the password for this SpendLog account.\n\nChoose a new password here (the link works for 30 minutes, once):\n${base}/?reset=${token}\n\nIf it was not you, ignore this email. Your password has not changed.`,
+        });
+      } catch (err) {
+        console.error('Password reset email failed:', err.message);
+      }
+    }
+    res.json(FORGOT_REPLY);
+  });
+
+  // A valid token sets the new password, signs out every other device and signs this browser in.
+  app.post('/api/reset', async (req, res) => {
+    const { token, password } = req.body || {};
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return res.status(400).json({ error: 'This reset link is not valid. Ask for a new one' });
+    if (typeof password !== 'string' || password.length < 6 || password.length > 128) return res.status(400).json({ error: 'Password must be 6 to 128 characters' });
+    const user = await User.findOne({ resetTokenHash: sha256(token) });
+    if (!user || !user.resetTokenExpires || new Date(user.resetTokenExpires) < new Date()) {
+      return res.status(400).json({ error: 'This reset link has expired or was already used. Ask for a new one' });
+    }
+    const updated = await User.findByIdAndUpdate(user.id, {
+      passwordHash: await bcrypt.hash(password, 10),
+      resetTokenHash: null,
+      resetTokenExpires: null,
+      sessionVersion: (user.sessionVersion || 0) + 1,
+    }, { new: true });
+    await limiter.clear(`${req.ip}|${user.email}`);
+    setLoginCookie(res, updated, secret);
+    res.json({ email: updated.email, budget: updated.budget || 0 });
   });
 
   app.post('/api/logout', (req, res) => { clearLoginCookie(res); res.json({ ok: true }); });
 
   // Who is logged in? The page calls this on load so a refresh keeps you signed in.
   app.get('/api/me', auth, async (req, res) => {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(401).json({ error: 'Please log in' });
+    const user = req.user;
     res.json({ email: user.email, budget: user.budget || 0 });
   });
 

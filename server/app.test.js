@@ -28,7 +28,7 @@ function fakeModels() {
   let n = 0;
   return {
     User: {
-      findOne: async q => users.find(u => u.email === q.email) || null,
+      findOne: async q => users.find(u => Object.entries(q).every(([k, v]) => u[k] === v)) || null,
       findById: async id => users.find(u => u.id === id) || null,
       create: async d => { const u = { ...d, id: 'u' + ++n }; users.push(u); return u; },
       findByIdAndUpdate: async (id, patch) => Object.assign(users.find(u => u.id === id), patch),
@@ -49,8 +49,8 @@ function fakeModels() {
   };
 }
 
-async function start() {
-  const server = createApp({ ...fakeModels(), secret: 'test-secret' }).listen(0);
+async function start(extra = {}) {
+  const server = createApp({ ...fakeModels(), secret: 'test-secret', ...extra }).listen(0);
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (path, { method = 'GET', body, cookie } = {}) => {
     const r = await fetch(base + path, {
@@ -263,5 +263,78 @@ test('validates email, password and expense limits', async () => {
   assert.equal((await add(call, c, 'x'.repeat(121), 5, 'Food')).status, 400);
   assert.equal((await add(call, c, 'Huge', 2e9, 'Food')).status, 400);
   assert.equal((await add(call, c, 'Chai', 20, 'Food')).status, 201);
+  close();
+});
+
+// Captures emails instead of sending them.
+function outbox() {
+  const sent = [];
+  return { sent, sendEmail: async m => { sent.push(m); return { sent: true }; } };
+}
+const linkToken = text => text.match(/\?reset=([A-Za-z0-9_-]+)/)[1];
+
+test('forgot password: same reply for unknown emails, and the link resets the password once', async () => {
+  const mail = outbox();
+  const { call, close } = await start({ sendEmail: mail.sendEmail, appUrl: 'https://spendlog.test' });
+  const reg = await call('/api/register', { method: 'POST', body: { email: 'r@b.com', password: 'old-pass' } });
+
+  const unknown = await call('/api/forgot', { method: 'POST', body: { email: 'nobody@b.com' } });
+  const known = await call('/api/forgot', { method: 'POST', body: { email: 'r@b.com' } });
+  assert.equal(unknown.status, 200);
+  assert.deepEqual(unknown.json, known.json);
+  assert.equal(mail.sent.length, 1);
+  assert.match(mail.sent[0].text, /https:\/\/spendlog\.test\/\?reset=/);
+
+  const token = linkToken(mail.sent[0].text);
+  assert.equal((await call('/api/reset', { method: 'POST', body: { token, password: '123' } })).status, 400);
+  const reset = await call('/api/reset', { method: 'POST', body: { token, password: 'new-pass' } });
+  assert.equal(reset.status, 200);
+  assert.ok(reset.cookie.startsWith('token='));
+
+  // The old cookie is signed out, the new one works, and the link cannot be used twice.
+  assert.equal((await call('/api/me', { cookie: reg.cookie })).status, 401);
+  assert.equal((await call('/api/me', { cookie: reset.cookie })).status, 200);
+  assert.equal((await call('/api/reset', { method: 'POST', body: { token, password: 'other-pass' } })).status, 400);
+  assert.equal((await call('/api/login', { method: 'POST', body: { email: 'r@b.com', password: 'old-pass' } })).status, 401);
+  assert.equal((await call('/api/login', { method: 'POST', body: { email: 'r@b.com', password: 'new-pass' } })).status, 200);
+  close();
+});
+
+test('login rejects non-string fields instead of passing them to the database', async () => {
+  const { call, close } = await start();
+  const r = await call('/api/login', { method: 'POST', body: { email: { $ne: null }, password: 'x' } });
+  assert.equal(r.status, 400);
+  close();
+});
+
+// A stand-in for the LoginAttempt model that understands the few queries the limiter sends.
+function fakeAttempts() {
+  const rows = new Map();
+  const live = (key, now = new Date()) => { const r = rows.get(key); return r && r.expiresAt > now ? r : null; };
+  return {
+    rows,
+    findOne: q => ({ lean: async () => live(q.key, q.expiresAt.$gt) || null }),
+    deleteOne: async q => { const r = rows.get(q.key); if (r && (!q.expiresAt || r.expiresAt <= q.expiresAt.$lte)) rows.delete(q.key); },
+    updateOne: async (q, u) => {
+      const r = rows.get(q.key) || { key: q.key, count: 0, ...u.$setOnInsert };
+      r.count += u.$inc.count;
+      rows.set(q.key, r);
+    },
+  };
+}
+
+test('with a LoginAttempt model, failed logins are counted in the database and lock the account', async () => {
+  const LoginAttempt = fakeAttempts();
+  const { call, close } = await start({ LoginAttempt });
+  await call('/api/register', { method: 'POST', body: { email: 'l@b.com', password: 'right-pass' } });
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await call('/api/login', { method: 'POST', body: { email: 'l@b.com', password: 'wrong' } })).status, 401);
+  }
+  assert.equal([...LoginAttempt.rows.values()][0].count, 5);
+  const locked = await call('/api/login', { method: 'POST', body: { email: 'l@b.com', password: 'right-pass' } });
+  assert.equal(locked.status, 429);
+  // When the window passes, the right password works again.
+  for (const r of LoginAttempt.rows.values()) r.expiresAt = new Date(Date.now() - 1000);
+  assert.equal((await call('/api/login', { method: 'POST', body: { email: 'l@b.com', password: 'right-pass' } })).status, 200);
   close();
 });

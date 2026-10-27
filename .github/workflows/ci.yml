@@ -8,6 +8,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,3 +23,9 @@ jobs:
         run: npm test
       - name: Build the React app
         run: npm run build
+      - name: Install Chromium for the browser test
+        run: npx playwright install --with-deps chromium
+      - name: Browser journey (real server, real MongoDB)
+        run: npm run test:e2e
+        env:
+          MONGODB_URI: mongodb://localhost:27017/spendlog-e2e

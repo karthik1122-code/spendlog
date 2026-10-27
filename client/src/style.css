@@ -21,6 +21,8 @@ a { color: inherit; }
 .brand span { color: var(--accent); }
 .muted { color: var(--muted); }
 .error { color: var(--err); }
+.notice { padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); }
+.link.small { justify-self: start; font-size: 0.875rem; margin-top: -6px; }
 .up { color: var(--err); font-weight: 700; } .down { color: var(--ok); font-weight: 700; }
 .dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .5em; background: var(--Other); flex: none; }
 .dot.Food { background: var(--Food); } .dot.Travel { background: var(--Travel); } .dot.Study { background: var(--Study); } .dot.Fun { background: var(--Fun); }
@@ -179,7 +181,9 @@ button { cursor: pointer; }
 .cat-cell { display: inline-flex; align-items: center; font-size: .9rem; }
 .actions { display: inline-flex; justify-content: flex-end; opacity: .5; transition: opacity .15s; }
 .row:hover .actions, .row:focus-within .actions { opacity: 1; }
-.del { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; padding: 0 6px; border-radius: 4px; }
+.del { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; min-width: 36px; min-height: 36px; display: inline-grid; place-items: center; border-radius: 8px; } /* comfortable tap target */
+.del:hover { background: rgba(0, 0, 0, .05); }
+@media (hover: none) { .actions { opacity: 1; } }
 .del:hover { color: var(--ink); } .del[aria-label^="Delete"]:hover { color: var(--err); }
 .row.editing { display: block; }
 .edit-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

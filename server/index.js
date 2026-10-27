@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { User, Expense } from './models.js';
+import { User, Expense, LoginAttempt } from './models.js';
 import { createApp } from './app.js';
 
 const { MONGODB_URI, JWT_SECRET, PORT = 4000 } = process.env;
@@ -9,7 +9,7 @@ if (!MONGODB_URI || !JWT_SECRET) {
 }
 
 await mongoose.connect(MONGODB_URI);
-const app = createApp({ User, Expense, secret: JWT_SECRET, log: true, dbReady: () => mongoose.connection.readyState === 1 });
+const app = createApp({ User, Expense, LoginAttempt, secret: JWT_SECRET, appUrl: process.env.APP_URL || '', log: true, dbReady: () => mongoose.connection.readyState === 1 });
 
 // In production the same server also serves the built React app.
 import express from 'express';
