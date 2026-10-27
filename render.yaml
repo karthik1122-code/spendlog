@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run server
-    healthCheckPath: /
+    healthCheckPath: /api/health
     envVars:
       - key: MONGODB_URI
         sync: false

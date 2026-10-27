@@ -9,7 +9,7 @@ if (!MONGODB_URI || !JWT_SECRET) {
 }
 
 await mongoose.connect(MONGODB_URI);
-const app = createApp({ User, Expense, secret: JWT_SECRET, log: true });
+const app = createApp({ User, Expense, secret: JWT_SECRET, log: true, dbReady: () => mongoose.connection.readyState === 1 });
 
 // In production the same server also serves the built React app.
 import express from 'express';
