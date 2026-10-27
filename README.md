@@ -21,17 +21,18 @@ Production: `npm run build`, then `npm run server` serves the API and the built 
 
 CI (`.github/workflows/ci.yml`) runs the API tests, the build and the browser journey (sign up, add, edit, delete with undo, reload, search) against a MongoDB service on every push and pull request.
 
-Environment: `MONGODB_URI` (MongoDB connection string), `JWT_SECRET` (long random string; `render.yaml` generates one), optional `PORT` (default 4000).
+Environment: `MONGODB_URI` (MongoDB connection string), `JWT_SECRET` (long random string; `render.yaml` generates one), optional `PORT` (default 4000). For password-reset email: `RESEND_API_KEY`, `EMAIL_FROM` (a sender on a domain verified in Resend) and `APP_URL` (the public site URL used in the link). Without a Resend key, reset links are printed to the server log.
 
 ## Layout
 
 ```
 server/
-  models.js    User and Expense schemas
-  auth.js      JWT cookie helpers and the requireAuth middleware
+  models.js    User, Expense and LoginAttempt schemas (LoginAttempt rows expire through a TTL index)
+  auth.js      JWT cookie helpers and requireAuth (also checks the session version, so a reset signs out old cookies)
   app.js       All routes (accounts, session check, budget, expenses, CSV) and the error handler
   constants.js The five categories, shared by the API and the database
-  rateLimit.js Blocks repeated wrong-password logins (429)
+  rateLimit.js Blocks repeated wrong-password logins (429); counts live in MongoDB in production
+  email.js     Sends the reset email through Resend, or prints it in development
   csv.js       Builds the CSV download and neutralises spreadsheet formulas
   queries.js   Pure helpers: time-zone aware month ranges, regex escaping, the summary builder
   app.test.js  Tests with in-memory fake models
@@ -55,6 +56,8 @@ client/src/
 | GET | /api/health | no | `{ status, db }`: 200 when MongoDB is connected, 503 when it is not (Render uses this) |
 | POST | /api/register | no | Create account, set login cookie |
 | POST | /api/login | no | Check password, set login cookie (rate limited) |
+| POST | /api/forgot | no | Email a single-use reset link (30 minutes). Same reply whether or not the account exists |
+| POST | /api/reset | no | `{ token, password }`: set a new password, sign out other devices, sign in here |
 | POST | /api/logout | no | Clear the cookie |
 | GET | /api/me | yes | Who is logged in and their monthly budget |
 | PUT | /api/budget | yes | Set the monthly budget |
@@ -67,4 +70,4 @@ client/src/
 
 ## Limits
 
-Request bodies are capped at 100 kb; titles at 120 characters. No password reset. Totals are calculated in JavaScript from the month's expenses, not with a MongoDB aggregation pipeline (a good next step). The login rate limiter lives in memory, so it resets when the server restarts and is not shared between servers. It is a learning project.
+Request bodies are capped at 100 kb; titles at 120 characters. Totals are calculated in JavaScript from the month's expenses, not with a MongoDB aggregation pipeline (a good next step). Failed logins are counted in MongoDB, so the lock survives restarts and is shared between servers. Password-reset email needs a Resend account with a verified sender. It is a learning project.

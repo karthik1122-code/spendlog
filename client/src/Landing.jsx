@@ -1,20 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 
-// Sign-in and sign-up in a modal. The built-in <dialog> element gives focus trapping and Esc to close.
-function AuthDialog({ mode, onMode, onClose, onLoggedIn }) {
+// Sign-in, sign-up, forgot password and reset password in one modal.
+// The built-in <dialog> element gives focus trapping and Esc to close.
+const TEXT = {
+  login: { title: 'Welcome back', sub: 'Log in to see your spending.', button: 'Log in' },
+  register: { title: 'Create your free account', sub: 'No card needed. Start logging in under a minute.', button: 'Create account' },
+  forgot: { title: 'Reset your password', sub: 'Enter your email and we will send you a link to choose a new password.', button: 'Send reset link' },
+  reset: { title: 'Choose a new password', sub: 'After this, any other device signed in to your account is signed out.', button: 'Save new password' },
+};
+
+function AuthDialog({ mode, onMode, onClose, onLoggedIn, resetToken }) {
   const ref = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { ref.current?.showModal(); }, []);
+  const t = TEXT[mode];
+
+  function go(next) { onMode(next); setError(''); setNotice(''); }
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
+    setError('');
     try {
-      setError('');
+      if (mode === 'forgot') {
+        setNotice((await api('/forgot', 'POST', { email })).message);
+        setBusy(false);
+        return;
+      }
+      if (mode === 'reset') {
+        const user = await api('/reset', 'POST', { token: resetToken, password });
+        window.history.replaceState(null, '', '/');
+        onLoggedIn(user);
+        return;
+      }
       onLoggedIn(await api(mode === 'login' ? '/login' : '/register', 'POST', { email, password }));
     } catch (err) {
       setError(err.message);
@@ -25,15 +48,19 @@ function AuthDialog({ mode, onMode, onClose, onLoggedIn }) {
   return (
     <dialog ref={ref} className="auth" onClose={onClose} onClick={e => { if (e.target === ref.current) ref.current.close(); }}>
       <form className="auth-form" onSubmit={submit}>
-        <h2>{mode === 'login' ? 'Welcome back' : 'Create your free account'}</h2>
-        <p className="muted">{mode === 'login' ? 'Log in to see your spending.' : 'No card needed. Start logging in under a minute.'}</p>
-        <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" autoFocus /></label>
-        <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 6 characters" /></label>
+        <h2>{t.title}</h2>
+        <p className="muted">{t.sub}</p>
+        {mode !== 'reset' && <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" autoFocus /></label>}
+        {mode !== 'forgot' && (
+          <label>{mode === 'reset' ? 'New password' : 'Password'}<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 6 characters" autoFocus={mode === 'reset'} /></label>
+        )}
+        {mode === 'login' && <button type="button" className="link small" onClick={() => go('forgot')}>Forgot password?</button>}
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'One moment…' : mode === 'login' ? 'Log in' : 'Create account'}</button>
-        <button type="button" className="link" onClick={() => { onMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
-          {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}
-        </button>
+        {notice && <p className="notice" role="status">{notice}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'One moment…' : t.button}</button>
+        {mode === 'register' || mode === 'login'
+          ? <button type="button" className="link" onClick={() => go(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}</button>
+          : <button type="button" className="link" onClick={() => { window.history.replaceState(null, '', '/'); go('login'); }}>Back to log in</button>}
       </form>
     </dialog>
   );
@@ -95,7 +122,9 @@ const FEATURES = [
 ];
 
 export default function Landing({ onLoggedIn }) {
-  const [mode, setMode] = useState(null); // null, 'login' or 'register'
+  // A password-reset email links to /?reset=<token>, which opens the dialog straight on "Choose a new password".
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'));
+  const [mode, setMode] = useState(resetToken ? 'reset' : null); // null, 'login', 'register', 'forgot' or 'reset'
   const featRef = useReveal();
   const stepRef = useReveal();
   const finalRef = useReveal();
@@ -153,7 +182,7 @@ export default function Landing({ onLoggedIn }) {
         <a href="https://github.com/karthik1122-code/spendlog" target="_blank" rel="noreferrer">Source on GitHub</a>
       </footer>
 
-      {mode && <AuthDialog mode={mode} onMode={setMode} onClose={() => setMode(null)} onLoggedIn={onLoggedIn} />}
+      {mode && <AuthDialog key={mode === 'reset' ? 'reset' : 'auth'} mode={mode} onMode={setMode} onClose={() => setMode(null)} onLoggedIn={onLoggedIn} resetToken={resetToken} />}
     </div>
   );
 }

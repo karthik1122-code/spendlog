@@ -21,6 +21,8 @@ a { color: inherit; }
 .brand span { color: var(--accent); }
 .muted { color: var(--muted); }
 .error { color: var(--err); }
+.notice { padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); }
+.link.small { justify-self: start; font-size: 0.875rem; margin-top: -6px; }
 .up { color: var(--err); font-weight: 700; } .down { color: var(--ok); font-weight: 700; }
 .dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .5em; background: var(--Other); flex: none; }
 .dot.Food { background: var(--Food); } .dot.Travel { background: var(--Travel); } .dot.Study { background: var(--Study); } .dot.Fun { background: var(--Fun); }
