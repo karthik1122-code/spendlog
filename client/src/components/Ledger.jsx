@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CATEGORIES, dayHeading, rupees } from './format.js';
+import { CATEGORIES, dayHeading, rupees } from '../lib/format.js';
 
 // The transactions list: search (press / to jump to it), category filters, edit in place, page buttons.
 export default function Ledger({ data, filter, onFilter, query, onQuery, searching, onPage, onEdit, onDelete }) {

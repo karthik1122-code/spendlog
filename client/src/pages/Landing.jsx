@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from './api.js';
+import { api } from '../lib/api.js';
 
 // Sign-in, sign-up, forgot password and reset password in one modal.
 // The built-in <dialog> element gives focus trapping and Esc to close.

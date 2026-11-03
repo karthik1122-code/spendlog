@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CATEGORIES, atNoon, todayInput } from './format.js';
+import { CATEGORIES, atNoon, todayInput } from '../lib/format.js';
 
 // Quick-add form: type, press Enter, and the cursor jumps back to the title for the next one.
 export default function AddForm({ onAdd }) {

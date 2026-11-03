@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CATEGORIES } from './constants.js';
+import { CATEGORIES } from '../config/constants.js';
 
 // A user: email + hashed password. We never store the plain password.
 const userSchema = new mongoose.Schema({

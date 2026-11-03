@@ -25,29 +25,71 @@ Environment: `MONGODB_URI` (MongoDB connection string), `JWT_SECRET` (long rando
 
 ## Layout
 
+The server is split into layers. A request flows top to bottom, and each layer only talks to the one below it:
+
+```
+request -> middleware -> routes -> controllers -> services -> models -> MongoDB
+```
+
 ```
 server/
-  models.js    User, Expense and LoginAttempt schemas (LoginAttempt rows expire through a TTL index)
-  auth.js      JWT cookie helpers and requireAuth (also checks the session version, so a reset signs out old cookies)
-  app.js       All routes (accounts, session check, budget, expenses, CSV) and the error handler
-  constants.js The five categories, shared by the API and the database
-  rateLimit.js Blocks repeated wrong-password logins (429); counts live in MongoDB in production
-  email.js     Sends the reset email through Resend, or prints it in development
-  csv.js       Builds the CSV download and neutralises spreadsheet formulas
-  queries.js   Pure helpers: time-zone aware month ranges, regex escaping, the summary builder
-  app.test.js  Tests with in-memory fake models
-  index.js     Connects to MongoDB, starts the server
+  index.js                 Connects to MongoDB, builds the app, starts listening
+  app.js                   Wires the layers together (createApp takes models as arguments, so tests pass fakes)
+  config/constants.js      Categories, password rules, limits: values shared by the API and the database
+  models/index.js          User, Expense and LoginAttempt schemas (LoginAttempt rows expire through a TTL index)
+  routes/                  URL -> controller, plus which routes need login
+    index.js               Mounts every router under /api
+    health.routes.js       GET /api/health
+    auth.routes.js         register, login, logout, forgot, reset, me, budget
+    expense.routes.js      expenses CRUD, summary, CSV
+  controllers/             HTTP only: read req, call a service, write res (cookies, status codes)
+    auth.controller.js
+    expense.controller.js
+  services/                Business rules and database calls; no req/res, throws AppError on bad input
+    auth.service.js        Accounts, login lock, password reset, budget
+    expense.service.js     List with filters and paging, summary, create, update, delete
+  validators/              Pure checks for request input (expense fields, email, password, paging)
+  middleware/
+    auth.js                requireAuth: verifies the cookie and the session version
+    security.js            Security headers and the request logger
+    errorHandler.js        Turns AppError and library errors into JSON with the right status
+  lib/                     Small helpers with no Express or database code
+    AppError.js            Error with an HTTP status (badRequest, notFound, ...)
+    session.js             Sign, set, clear and read the JWT cookie
+    rateLimit.js           Failed-login counter (MongoDB in production, memory in tests)
+    email.js               Sends the reset email through Resend, or prints it in development
+    csv.js                 Builds the CSV download and neutralises spreadsheet formulas
+    dates.js               Time-zone aware month ranges, regex escaping, the summary builder
+  tests/api.test.js        API tests with in-memory fake models
 client/src/
-  App.jsx       Chooses landing page or dashboard; the Tracker holds state and loads data; undo toast
-  Landing.jsx   Marketing page (hero, sample preview, features, steps) and the sign-in dialog
-  Kpis.jsx      Four headline cards: spent (change vs last month), budget, daily average, top category
-  Insights.jsx  Six-month chart and the category breakdown
-  AddForm.jsx   Quick-add form (category chips, date, Enter to add)
-  Ledger.jsx    Transactions: search (press /), filters, inline edit, page buttons
-  format.js     Rupee, month and date helpers
-  hooks.js      useDebounced
-  api.js        fetch helper
+  main.jsx, App.jsx        Entry; App chooses the landing page or the dashboard
+  pages/
+    Landing.jsx            Marketing page and the sign-in / sign-up / reset dialog
+    Dashboard.jsx          Signed-in page: holds state, loads data, passes it to components
+  components/
+    Kpis.jsx               Four headline cards: spent, budget, daily average, top category
+    Insights.jsx           Six-month chart and the category breakdown
+    AddForm.jsx            Quick-add form (category chips, date, Enter to add)
+    Ledger.jsx             Transactions: search, filters, inline edit, page buttons
+    Toast.jsx              Undo message after a delete
+  lib/
+    api.js                 fetch helper that throws the server's error message
+    format.js              Rupee, month and date helpers
+    hooks.js               useDebounced
+e2e/                       Browser tests (Playwright) against the real server and MongoDB
 ```
+
+### Where to change things
+
+| You want to... | Change |
+| --- | --- |
+| Add an API endpoint | Route in `routes/`, handler in `controllers/`, logic in `services/` |
+| Add a field to expenses | `models/index.js` (schema), `validators/expense.validator.js` (check), `components/AddForm.jsx` (form) |
+| Change a business rule (limits, who can see what) | `services/` |
+| Change an error message or status | The service that throws it (`lib/AppError.js` helpers) |
+| Add a category | `config/constants.js` (the client reads the same list in `lib/format.js`) |
+| Protect a route with login | Add `requireAuth` to it in `routes/` |
+| Change the dashboard layout | `pages/Dashboard.jsx` and the component it renders |
 
 ## API
 

@@ -11,13 +11,7 @@ export function setLoginCookie(res, user, secret) {
 
 export const clearLoginCookie = res => res.clearCookie(COOKIE);
 
-// Middleware: runs before protected routes. Valid, current token -> req.userId is set. Otherwise 401.
-export const requireAuth = (secret, User) => async (req, res, next) => {
-  let payload;
-  try { payload = jwt.verify(req.cookies[COOKIE], secret); } catch { return res.status(401).json({ error: 'Please log in' }); }
-  const user = await User.findById(payload.id);
-  if (!user || (user.sessionVersion || 0) !== (payload.v || 0)) return res.status(401).json({ error: 'Please log in' });
-  req.userId = payload.id;
-  req.user = user;
-  next();
-};
+// Returns { id, v } from a valid cookie, or null.
+export function readSession(req, secret) {
+  try { return jwt.verify(req.cookies[COOKIE], secret); } catch { return null; }
+}
