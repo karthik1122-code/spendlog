@@ -109,11 +109,17 @@ export default function Dashboard({ user, onLogout }) {
         </div>
         <div className="user">
           <span className="avatar" aria-hidden="true">{initial}</span>
-          <span className="who">{user.email}</span>
+          <span className="who">{user.demo ? 'Demo account' : user.email}</span>
           <button className="link" onClick={onLogout}>Log out</button>
         </div>
       </header>
 
+      {user.demo && (
+        <p className="demo-banner" role="status">
+          You're exploring a demo account with sample expenses. Change anything you like; it's deleted after 24 hours.
+          <button className="link" onClick={onLogout}>Create your own account</button>
+        </p>
+      )}
       <div className="dash">
         {/* Logging an expense is the main job, so the form comes first. */}
         <AddForm onAdd={addExpense} />

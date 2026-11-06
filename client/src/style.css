@@ -251,3 +251,7 @@ button { cursor: pointer; }
 
 .landing, .app { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 .lede, .feature p, .steps p { text-wrap: pretty; }
+
+/* Demo account notice */
+.demo-banner { max-width: 1100px; margin: 12px auto 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: .95rem; }
+.demo-banner .link { font-weight: 700; }

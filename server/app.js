@@ -7,6 +7,7 @@ import { requireAuth } from './middleware/auth.js';
 import { securityHeaders, requestLogger } from './middleware/security.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createAuthService } from './services/auth.service.js';
+import { createDemoService } from './services/demo.service.js';
 import { createExpenseService } from './services/expense.service.js';
 import { createAuthController } from './controllers/auth.controller.js';
 import { createExpenseController } from './controllers/expense.controller.js';
@@ -37,7 +38,7 @@ export function createApp({ User, Expense, LoginAttempt, secret, log = false, db
   const deps = {
     dbReady,
     requireAuth: requireAuth(secret, User),
-    authController: createAuthController({ authService, secret, appUrl }),
+    authController: createAuthController({ authService, demoService: createDemoService({ User, Expense, limiter }), secret, appUrl }),
     expenseController: createExpenseController({ expenseService }),
   };
 

@@ -5,7 +5,7 @@ import { badRequest, conflict, tooMany, unauthorized } from '../lib/AppError.js'
 import { isEmail, isPassword, isResetToken, PASSWORD_RULE } from '../validators/auth.validator.js';
 
 const sha256 = s => crypto.createHash('sha256').update(s).digest('hex');
-export const publicUser = user => ({ email: user.email, budget: user.budget || 0 });
+export const publicUser = user => ({ email: user.email, budget: user.budget || 0, demo: Boolean(user.demo) });
 
 // Accounts: register, login, password reset. Knows nothing about HTTP; throws AppError on bad input.
 export function createAuthService({ User, limiter, sendEmail }) {

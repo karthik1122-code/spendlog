@@ -4,7 +4,7 @@ import { publicUser } from '../services/auth.service.js';
 const FORGOT_REPLY = { message: 'If an account uses that email, a reset link is on its way. It works for 30 minutes.' };
 
 // HTTP layer for accounts: read the request, call the service, write the response.
-export function createAuthController({ authService, secret, appUrl }) {
+export function createAuthController({ authService, demoService, secret, appUrl }) {
   return {
     async register(req, res) {
       const user = await authService.register(req.body || {});
@@ -15,6 +15,12 @@ export function createAuthController({ authService, secret, appUrl }) {
       const user = await authService.login(req.body || {}, req.ip);
       setLoginCookie(res, user, secret);
       res.json(publicUser(user));
+    },
+    // Signs the visitor into a fresh demo account filled with sample expenses.
+    async demo(req, res) {
+      const user = await demoService.create(req.ip);
+      setLoginCookie(res, user, secret);
+      res.status(201).json(publicUser(user));
     },
     logout(req, res) {
       clearLoginCookie(res);
