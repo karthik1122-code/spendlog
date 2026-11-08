@@ -1,4 +1,4 @@
-import { CATEGORIES, monthLabel, rupees } from './format.js';
+import { CATEGORIES, monthLabel, rupees } from '../lib/format.js';
 
 // Two charts: spending over the last six months (click a bar to open that month) and the split by category.
 export default function Insights({ summary, month, onMonth }) {

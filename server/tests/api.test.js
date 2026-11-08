@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from './app.js';
+import { createApp } from '../app.js';
 
 // A tiny version of Mongo's filter matching: user, category, date range and title regex.
 function matches(e, f) {
@@ -32,11 +32,17 @@ function fakeModels() {
       findById: async id => users.find(u => u.id === id) || null,
       create: async d => { const u = { ...d, id: 'u' + ++n }; users.push(u); return u; },
       findByIdAndUpdate: async (id, patch) => Object.assign(users.find(u => u.id === id), patch),
+      find: async q => users.filter(u => u.demo === q.demo && u.createdAt < q.createdAt.$lt),
+      deleteMany: async q => { const ids = q._id.$in; for (let i = users.length - 1; i >= 0; i--) if (ids.includes(users[i].id)) users.splice(i, 1); },
+      all: () => users,
     },
     Expense: {
       find: filter => query(expenses.filter(e => matches(e, filter))),
       countDocuments: async filter => expenses.filter(e => matches(e, filter)).length,
       create: async d => { const e = { date: new Date(), ...d, _id: 'e' + ++n }; expenses.push(e); return e; },
+      insertMany: async rows => rows.map(d => { const e = { ...d, _id: 'e' + ++n }; expenses.push(e); return e; }),
+      deleteMany: async q => { const ids = q.user.$in; for (let i = expenses.length - 1; i >= 0; i--) if (ids.includes(expenses[i].user)) expenses.splice(i, 1); },
+      all: () => expenses,
       findOneAndUpdate: async (q, patch) => {
         const e = expenses.find(x => x._id === q._id && x.user === q.user);
         return e ? Object.assign(e, patch) : null;
@@ -108,7 +114,7 @@ test('/api/me restores the session from the cookie', async () => {
   const cookie = await signUp(call);
   const me = await call('/api/me', { cookie });
   assert.equal(me.status, 200);
-  assert.deepEqual(me.json, { email: 'a@b.com', budget: 0 });
+  assert.deepEqual(me.json, { email: 'a@b.com', budget: 0, demo: false });
   close();
 });
 
@@ -336,5 +342,33 @@ test('with a LoginAttempt model, failed logins are counted in the database and l
   // When the window passes, the right password works again.
   for (const r of LoginAttempt.rows.values()) r.expiresAt = new Date(Date.now() - 1000);
   assert.equal((await call('/api/login', { method: 'POST', body: { email: 'l@b.com', password: 'right-pass' } })).status, 200);
+  close();
+});
+
+test('Try the demo signs into a fresh account with sample expenses, private to that visitor', async () => {
+  const { call, close } = await start();
+  const a = await call('/api/demo', { method: 'POST' });
+  assert.equal(a.status, 201);
+  assert.equal(a.json.demo, true);
+  assert.equal(a.json.budget, 6000);
+  assert.ok(a.cookie.startsWith('token='));
+  const me = await call('/api/me', { cookie: a.cookie });
+  assert.equal(me.status, 200);
+  assert.equal(me.json.demo, true);
+  const list = await call('/api/expenses', { cookie: a.cookie });
+  assert.equal(list.status, 200);
+  assert.ok(list.json.total > 0, 'the demo month has sample expenses');
+  // A second visitor gets a different account, so edits never leak between visitors.
+  const b = await call('/api/demo', { method: 'POST' });
+  assert.notEqual((await call('/api/me', { cookie: b.cookie })).json.email, me.json.email);
+  close();
+});
+
+test('Try the demo is rate limited per network', async () => {
+  const { call, close } = await start();
+  const codes = [];
+  for (let i = 0; i < 7; i++) codes.push((await call('/api/demo', { method: 'POST' })).status);
+  assert.deepEqual(codes.slice(0, 5), [201, 201, 201, 201, 201]);
+  assert.equal(codes[6], 429);
   close();
 });

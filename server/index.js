@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { User, Expense, LoginAttempt } from './models.js';
+import { User, Expense, LoginAttempt } from './models/index.js';
 import { createApp } from './app.js';
 
 const { MONGODB_URI, JWT_SECRET, PORT = 4000 } = process.env;

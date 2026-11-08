@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from './api.js';
+import { api } from '../lib/api.js';
 
 // Sign-in, sign-up, forgot password and reset password in one modal.
 // The built-in <dialog> element gives focus trapping and Esc to close.
@@ -125,6 +125,14 @@ export default function Landing({ onLoggedIn }) {
   // A password-reset email links to /?reset=<token>, which opens the dialog straight on "Choose a new password".
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'));
   const [mode, setMode] = useState(resetToken ? 'reset' : null); // null, 'login', 'register', 'forgot' or 'reset'
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoError, setDemoError] = useState('');
+  // One click into a private demo account with a month of sample expenses, so visitors can look around first.
+  async function tryDemo() {
+    setDemoBusy(true);
+    setDemoError('');
+    try { onLoggedIn(await api('/demo', 'POST')); } catch (err) { setDemoError(err.message); setDemoBusy(false); }
+  }
   const featRef = useReveal();
   const stepRef = useReveal();
   const finalRef = useReveal();
@@ -147,9 +155,10 @@ export default function Landing({ onLoggedIn }) {
             <p className="lede">SpendLog is a simple expense tracker with monthly budgets, instant search and private accounts. Log what you spend in seconds and see exactly where it goes.</p>
             <div className="cta">
               <button className="primary lg" onClick={() => setMode('register')}>Get started, it's free</button>
-              <button className="ghost lg" onClick={() => setMode('login')}>Log in</button>
+              <button className="ghost lg" onClick={tryDemo} disabled={demoBusy}>{demoBusy ? 'Opening demo…' : 'Try the demo'}</button>
             </div>
-            <p className="fine">No card needed · Works on your phone · Export anytime</p>
+            {demoError && <p className="error" role="alert">{demoError}</p>}
+            <p className="fine">No sign-up for the demo · Works on your phone · Export anytime</p>
           </div>
           <Preview />
         </section>

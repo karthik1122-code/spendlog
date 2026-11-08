@@ -1,4 +1,4 @@
-import { monthLabel, rupees, shiftMonth } from './format.js';
+import { monthLabel, rupees, shiftMonth } from '../lib/format.js';
 
 // Four headline cards: spent (with change vs last month), budget, daily average, top category.
 export default function Kpis({ summary, month, budget, budgetInput, onBudgetInput, onSaveBudget }) {

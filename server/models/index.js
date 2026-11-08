@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CATEGORIES } from './constants.js';
+import { CATEGORIES } from '../config/constants.js';
 
 // A user: email + hashed password. We never store the plain password.
 const userSchema = new mongoose.Schema({
@@ -9,7 +9,10 @@ const userSchema = new mongoose.Schema({
   sessionVersion: { type: Number, default: 0 }, // bumped on password reset to sign out old cookies
   resetTokenHash: { type: String, default: null }, // sha256 of the emailed reset token, never the token itself
   resetTokenExpires: { type: Date, default: null },
+  demo: { type: Boolean, default: false }, // made by "Try the demo"; deleted after a day
+  createdAt: { type: Date, default: Date.now },
 });
+userSchema.index({ demo: 1, createdAt: 1 });
 
 // An expense belongs to one user. Amount is stored in rupees.
 const expenseSchema = new mongoose.Schema({
