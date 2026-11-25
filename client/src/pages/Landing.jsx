@@ -79,35 +79,31 @@ function useReveal() {
   return ref;
 }
 
-// A small, clearly labelled sample of the dashboard so visitors see the product before signing up.
+// A small, clearly labelled sample of the ledger so visitors see the product before signing up.
 function Preview() {
-  const bars = [['May', 38], ['Jun', 54], ['Jul', 31], ['Aug', 70], ['Sep', 82], ['Oct', 62]];
-  const split = [['Food', 'Food', 46, '₹2,240'], ['Travel', 'Travel', 27, '₹1,310'], ['Study', 'Study', 17, '₹820'], ['Fun', 'Fun', 10, '₹490']];
+  const rows = [
+    ['Mon 20', 'Masala dosa, canteen', 'Food', '₹60'],
+    ['Mon 20', 'Metro card recharge', 'Travel', '₹500'],
+    ['Tue 21', 'DSA book, 2nd hand', 'Study', '₹240'],
+    ['Wed 22', 'Chai with the team', 'Food', '₹20'],
+    ['Fri 24', 'Movie, Sunday show', 'Fun', '₹180'],
+  ];
   return (
     <div className="visual" aria-hidden="true">
-    <span className="fchip c1"><i className="dot Food" />Lunch ₹180 added</span>
-    <span className="fchip c2">₹1,140 left this month</span>
-    <span className="fchip c3"><i className="dot Travel" />Metro ₹40</span>
-    <div className="preview">
-      <div className="preview-bar"><i /><i /><i /><span>spendlog</span></div>
-      <div className="preview-body">
-        <div className="p-kpis">
-          <div className="p-card"><small>Spent in October</small><b>₹4,860.00</b><em className="down">▼ 8% vs Sep</em></div>
-          <div className="p-card"><small>Budget</small><b>₹1,140.00</b><span className="p-track"><span style={{ width: '81%' }} /></span><em>left of ₹6,000</em></div>
+      <div className="preview">
+        <div className="pv-head">
+          <span className="pv-month">November</span>
+          <span className="pv-total"><small>spent</small>₹4,860</span>
         </div>
-        <div className="p-charts">
-          <div className="p-card p-trend">
-            <small>Last six months</small>
-            <div className="p-bars">{bars.map(([m, h]) => <span key={m} className={m === 'Oct' ? 'on' : ''}><i style={{ height: h + '%' }} /><small>{m}</small></span>)}</div>
-          </div>
-          <div className="p-card p-split">
-            <small>Where it went</small>
-            {split.map(([k, c, w, v]) => <p key={k}><span><i className={'dot ' + c} />{k}</span><span className="p-t"><span className={'seg ' + c} style={{ width: w * 2 + '%' }} /></span><b>{v}</b></p>)}
-          </div>
-        </div>
+        <ul className="pv-rows">
+          {rows.map(([d, t, c, a]) => (
+            <li key={t}><span className="pv-date">{d}</span><span className="pv-title"><i className={'dot ' + c} />{t}</span><b>{a}</b></li>
+          ))}
+          <li className="pv-new"><span className="pv-date">Today</span><span className="pv-title pv-typing">Lunch<span className="caret" /></span><b>₹180</b></li>
+        </ul>
+        <span className="pv-stamp">₹1,140<small>left of ₹6,000</small></span>
+        <p className="sample">Sample data</p>
       </div>
-      <p className="sample">Sample data</p>
-    </div>
     </div>
   );
 }
@@ -152,13 +148,13 @@ export default function Landing({ onLoggedIn }) {
         <section className="hero">
           <div className="hero-copy">
             <h1>Know where your money went, before the month ends.</h1>
-            <p className="lede">SpendLog is a simple expense tracker with monthly budgets, instant search and private accounts. Log what you spend in seconds and see exactly where it goes.</p>
+            <p className="lede">SpendLog is a pocket ledger for your money. Write down what you spend in two seconds, set one monthly budget, and see exactly where it went.</p>
             <div className="cta">
               <button className="primary lg" onClick={() => setMode('register')}>Get started, it's free</button>
               <button className="ghost lg" onClick={tryDemo} disabled={demoBusy}>{demoBusy ? 'Opening demo…' : 'Try the demo'}</button>
             </div>
             {demoError && <p className="error" role="alert">{demoError}</p>}
-            <p className="fine">No sign-up for the demo · Works on your phone · Export anytime</p>
+            <p className="fine">The demo needs no sign-up. Works on your phone. Export to CSV anytime.</p>
           </div>
           <Preview />
         </section>
@@ -180,7 +176,7 @@ export default function Landing({ onLoggedIn }) {
         </section>
 
         <section className="section final reveal" ref={finalRef}>
-          <h2>Start your ledger today</h2>
+          <h2>Start your ledger today.</h2>
           <p className="lede">It takes under a minute, and your first expense is the hardest part.</p>
           <button className="primary lg" onClick={() => setMode('register')}>Create free account</button>
         </section>

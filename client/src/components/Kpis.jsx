@@ -11,7 +11,7 @@ export default function Kpis({ summary, month, budget, budgetInput, onBudgetInpu
 
   return (
     <section className="kpis" aria-label="This month at a glance" aria-busy={!summary}>
-      <article className="card kpi">
+      <article className="card kpi spent">
         <h2>Spent in {monthLabel(month, { month: 'long' })}</h2>
         <p className={summary ? 'figure' : 'figure skeleton'}>{summary ? rupees(total) : '₹0,000.00'}</p>
         <p className="muted">
@@ -21,11 +21,11 @@ export default function Kpis({ summary, month, budget, budgetInput, onBudgetInpu
         </p>
       </article>
 
-      <article className="card kpi">
+      <article className="card kpi budget">
         <h2>Budget</h2>
         {budget > 0 ? (
           <>
-            <p className={over ? 'figure err' : 'figure'}>{over ? `−${rupees(total - budget)}` : rupees(budget - total)}</p>
+            <p className={over ? 'figure stamp err' : 'figure stamp'}>{over ? `−${rupees(total - budget)}` : rupees(budget - total)}</p>
             <div className="budget-bar" role="progressbar" aria-valuemin={0} aria-valuemax={budget} aria-valuenow={Math.min(total, budget)} aria-label="Share of monthly budget spent">
               <span className={over ? 'budget-fill over' : 'budget-fill'} style={{ width: used + '%' }} />
             </div>
